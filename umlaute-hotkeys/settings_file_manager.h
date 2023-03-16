@@ -5,6 +5,7 @@
 
 #include <io.h>
 #include <fcntl.h>
+
 #include <string>
 #include <vector>
 
@@ -130,6 +131,7 @@ inline hotkey_t parse_hotkey_settings_line(const std::string& file_contents, con
 	return convert_array_to_hotkey(split_on_commas);
 }
 
+// NOTE: I know that this parsing isn't the best, but the lack of perfection is worth the reduced amount of effort in this case, since I don't want to spend too much time on this program.
 inline hotkey_settings_t parse_hotkey_settings(const char* file_path) noexcept {
 	int fd = _open(file_path, _O_RDONLY, 0);
 	if (fd == -1) { return { }; }

@@ -134,7 +134,7 @@ LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char* lpCmdLine, int nCmdShow) {
-	WNDCLASSA windowClass = { };																																			// Create WNDCLASS struct for later window creation.
+	WNDCLASSA windowClass { };
 	windowClass.lpfnWndProc = windowProc;
 	windowClass.hInstance = hInstance;
 	windowClass.lpszClassName = WINDOW_CLASS_NAME;
@@ -145,22 +145,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char* lpCmdLine
 	}
 
 	HWND hWnd = CreateWindowA(windowClass.lpszClassName, nullptr, 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, hInstance, nullptr);
-	if (!hWnd) {																																				// Check if creation of window was successful.
+	if (!hWnd) {
 		debuglogger::out << debuglogger::error << "couldn't create window" << debuglogger::endl;
 		return EXIT_FAILURE;
 	}
 
-	// TODO: Switch to the legacy folder path get system.
-	const char *appdata_roaming_folder_path;
-	if (SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, nullptr, (PWSTR*)&appdata_roaming_folder_path) != S_OK) {
+	char appdata_roaming_folder_path[MAX_PATH];
+	// NOTE: I'm aware that this is the old version of the function, but the new version only outputs unicode and there's no pretty way to integrate that with the rest of this, so we're using the old version.
+	if (SHGetFolderPathA(nullptr, CSIDL_APPDATA, nullptr, SHGFP_TYPE_DEFAULT, appdata_roaming_folder_path) != S_OK) {
 		debuglogger::out << debuglogger::error << "couldn't get AppData/Roaming file path" << debuglogger::endl;
 	}
+	std::string settings_file_path = std::string(appdata_roaming_folder_path) + "\\umlaute_bindings.config";
 
-	hotkey_settings_t hotkey_file_settings = parse_hotkey_settings(config_path.c_str());
+	hotkey_settings_t hotkey_file_settings = parse_hotkey_settings(settings_file_path.c_str());
 	if (hotkey_file_settings == hotkey_settings_t{ }) {
 		debuglogger::out << debuglogger::error << "failed to read settings file/parse settings file" << debuglogger::endl;
 		return EXIT_FAILURE;
 	}
+
 	if (!register_hotkeys(hWnd, hotkey_file_settings)) {
 		debuglogger::out << debuglogger::error << "failed to register hotkeys" << debuglogger::endl;
 		return EXIT_FAILURE;
