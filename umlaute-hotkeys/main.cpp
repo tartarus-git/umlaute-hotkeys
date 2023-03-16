@@ -97,18 +97,18 @@ INPUT input_record_array[] {
 template <typename element_t, size_t length>
 consteval size_t static_array_length(const element_t (&)[length]) { return length; }
 
-bool register_hotkeys(const hotkey_settings_t& settings) noexcept {
+bool register_hotkeys(HWND hWnd, const hotkey_settings_t& settings) noexcept {
 	hotkey_t data[sizeof(settings) / sizeof(hotkey_t)];
 	std::memcpy(data, &settings, sizeof(settings));		// NOTE: VERY IMPORTANT, TO AVOID TYPE PUNNING DISASTER!
 	for (uint8_t i = 0; i < static_array_length(data); i++) {
-		if (!RegisterHotKey(nullptr, i, data[i].fs_modifiers, data[i].virtual_key_code)) { return false; }
+		if (!RegisterHotKey(hWnd, i, data[i].fs_modifiers, data[i].virtual_key_code)) { return false; }
 	}
 	return true;
 }
 
-bool unregister_hotkeys() noexcept {
+bool unregister_hotkeys(HWND hWnd) noexcept {
 	for (uint8_t i = 0; i < static_array_length(input_record_array); i++) {
-		if (!UnregisterHotKey(nullptr, i)) { return false; }
+		if (!UnregisterHotKey(hWnd, i)) { return false; }
 	}
 	return true;
 }
@@ -151,10 +151,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char* lpCmdLine
 
 	hotkey_settings_t hotkey_file_settings = parse_hotkey_settings("temp_settings.config");
 	if (hotkey_file_settings == hotkey_settings_t{ }) {
-		debuglogger::out << debuglogger::error << "failed to register hotkeys" << debuglogger::endl;
+		debuglogger::out << debuglogger::error << "failed to read settings file/parse settings file" << debuglogger::endl;
 		return EXIT_FAILURE;
 	}
-	if (!register_hotkeys(hotkey_file_settings)) {
+	if (!register_hotkeys(hWnd, hotkey_file_settings)) {
 		debuglogger::out << debuglogger::error << "failed to register hotkeys" << debuglogger::endl;
 		return EXIT_FAILURE;
 	}
@@ -165,7 +165,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char* lpCmdLine
 		DispatchMessageA(&msg);
 	}
 
-	if (!unregister_hotkeys()) {
+	if (!unregister_hotkeys(hWnd)) {
 		debuglogger::out << debuglogger::error << "failed to unregister hotkeys" << debuglogger::endl;
 		return EXIT_FAILURE;
 	}

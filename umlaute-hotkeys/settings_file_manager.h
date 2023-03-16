@@ -4,12 +4,11 @@
 #include <Windows.h>
 
 #include <io.h>
+#include <fcntl.h>
 #include <string>
 #include <vector>
 
 #define FILE_CONTENTS_BUFFER_RESIZE_RATE 256
-
-// TODO: make this file do better parsing and handle errors properly.
 
 struct hotkey_t {
 	unsigned int fs_modifiers;
@@ -62,18 +61,21 @@ inline std::vector<std::string> split_string(const std::string& input, char char
 	size_t prev_index = 0;
 	for (size_t i = 0; i < input.length(); i++) {
 		if (input[i] == character) {
-			result.push_back(input.substr(prev_index, i));
+			result.push_back(input.substr(prev_index, i - prev_index));
 			prev_index = i + 1;
 		}
 	}
-	if (prev_index == input.length()) { return result; }
-	result.push_back(input.substr(prev_index, input.length()));
+	if (prev_index == input.length()) {
+		result.push_back("");
+		return result;
+	}
+	result.push_back(input.substr(prev_index, input.length() - prev_index));
 	return result;
 }
 
 inline char to_lowercase(char character) noexcept {
 	if (character >= 'A' && character <= 'Z') {
-		return character - ('A' - 'a');
+		return character + ('a' - 'A');
 	}
 	return character;
 }
@@ -81,20 +83,20 @@ inline char to_lowercase(char character) noexcept {
 inline std::string to_lowercase(const std::string& input) noexcept {
 	std::string result;
 	for (size_t i = 0; i < input.length(); i++) {
-		result[i] = to_lowercase(input[i]);
+		result += to_lowercase(input[i]);
 	}
 	return result;
 }
 
 inline char to_uppercase(char character) noexcept {
 	if (character >= 'a' && character <= 'z') {
-		return character + ('A' - 'a');
+		return character - ('a' - 'A');
 	}
 	return character;
 }
 
 inline hotkey_t convert_array_to_hotkey(const std::vector<std::string> list) noexcept {
-	if (list.size() != 2) { return { 0, 0 }; }
+	if (list.size() != 2) { return { }; }
 
 	hotkey_t result;
 	result.fs_modifiers = 0;
@@ -103,47 +105,48 @@ inline hotkey_t convert_array_to_hotkey(const std::vector<std::string> list) noe
 	std::vector<std::string> modifier_strings = split_string(list[0], '+');
 	for (size_t i = 0; i < modifier_strings.size(); i++) {
 		std::string lowercase = to_lowercase(modifier_strings[i]);
-		if (lowercase == "alt") { result.fs_modifiers |= MOD_ALT; }
-		if (lowercase == "control") { result.fs_modifiers |= MOD_CONTROL; }
-		if (lowercase == "shift") { result.fs_modifiers |= MOD_SHIFT; }
+		if (lowercase == "alt") { result.fs_modifiers |= MOD_ALT; continue; }
+		if (lowercase == "control") { result.fs_modifiers |= MOD_CONTROL; continue; }
+		if (lowercase == "shift") { result.fs_modifiers |= MOD_SHIFT; continue; }
+		return { };
 	}
 
 	// parse virtual key code
-	std::string ascii = modifier_strings[1];
-	if (ascii.length() == 0) {
+	std::string ascii = list[1];
+	if (ascii.length() == 1) {
 		result.virtual_key_code = to_uppercase(ascii[0]);
-		return result;
-	}
-	if (ascii == "SS" || ascii == "ss") {
-		result.virtual_key_code = 'S';
 		return result;
 	}
 	return { };
 }
 
 inline hotkey_t parse_hotkey_settings_line(const std::string& file_contents, const char *line_tag) noexcept {
-	size_t entry_index = file_contents.find(std::string(line_tag) + ": ") + 3;
-	size_t endline_index = file_contents.find('\n');
-	std::string settings_line = file_contents.substr(entry_index, endline_index);
+	std::string string_line_tag(line_tag);
+	size_t entry_index = file_contents.find("\n" + string_line_tag + ":") + sizeof(char) + string_line_tag.length() + sizeof(char);
+	size_t endline_index = file_contents.find('\n', entry_index);
+	std::string settings_line = file_contents.substr(entry_index, endline_index - entry_index);
 	std::string no_whitespace_settings_line = remove_whitespace(settings_line);
 	std::vector<std::string> split_on_commas = split_string(no_whitespace_settings_line, ',');
 	return convert_array_to_hotkey(split_on_commas);
 }
 
 inline hotkey_settings_t parse_hotkey_settings(const char* file_path) noexcept {
-	int fd = _open(file_path, 0, 0);
+	int fd = _open(file_path, _O_RDONLY, 0);
+	if (fd == -1) { return { }; }
+
 	size_t filled_size = 0;
 	std::string file_contents;
+
 	while (true) {
-		file_contents.resize(filled_size + 256);
-		int bytes_read = _read(fd, file_contents.data() + filled_size, 256);
-		file_contents.resize(filled_size += bytes_read);
+		file_contents.resize(filled_size + FILE_CONTENTS_BUFFER_RESIZE_RATE);
+		int bytes_read = _read(fd, file_contents.data() + filled_size, FILE_CONTENTS_BUFFER_RESIZE_RATE);
 		if (bytes_read == 0) { break; }
 		if (bytes_read == -1) { return { }; }
+		file_contents.resize(filled_size += bytes_read);
 	}
+
 	if (_close(fd) == -1) { return { }; }
 
-	// simple parsing
 	hotkey_settings_t result {
 		.A = parse_hotkey_settings_line(file_contents, "A"),
 		.O = parse_hotkey_settings_line(file_contents, "O"),
