@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <ShlObj.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -149,7 +150,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char* lpCmdLine
 		return EXIT_FAILURE;
 	}
 
-	hotkey_settings_t hotkey_file_settings = parse_hotkey_settings("temp_settings.config");
+	// TODO: Switch to the legacy folder path get system.
+	const char *appdata_roaming_folder_path;
+	if (SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, nullptr, (PWSTR*)&appdata_roaming_folder_path) != S_OK) {
+		debuglogger::out << debuglogger::error << "couldn't get AppData/Roaming file path" << debuglogger::endl;
+	}
+
+	hotkey_settings_t hotkey_file_settings = parse_hotkey_settings(config_path.c_str());
 	if (hotkey_file_settings == hotkey_settings_t{ }) {
 		debuglogger::out << debuglogger::error << "failed to read settings file/parse settings file" << debuglogger::endl;
 		return EXIT_FAILURE;
